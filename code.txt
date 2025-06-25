@@ -7,12 +7,12 @@
 
 // --- НАСТРОЙКИ ---
 // Укажите данные вашей Wi-Fi сети
-const char* ssid = "Galaxy A25 5G 747A";
-const char* password = "12121212";
+const char* ssid = "";
+const char* password = "";
 
 // Укажите токен вашего бота и ваш Chat ID
-#define BOT_TOKEN "7931280012:AAF3nKFP2JMF0KkpswHimA-EZKh2HgffzUU"
-#define CHAT_ID "5291140379"
+#define BOT_TOKEN ""
+#define CHAT_ID ""
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
 WiFiClientSecure client;
