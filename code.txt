@@ -7,12 +7,12 @@
 
 // --- НАСТРОЙКИ ---
 // Укажите данные вашей Wi-Fi сети
-const char* ssid = "Galaxy A25 5G 747A";
-const char* password = "12121212";
+const char* ssid = "";
+const char* password = "";
 
 // Укажите токен вашего бота и ваш Chat ID
-#define BOT_TOKEN "7931280012:AAF3nKFP2JMF0KkpswHimA-EZKh2HgffzUU"
-#define CHAT_ID "5291140379"
+#define BOT_TOKEN ""
+#define CHAT_ID ""
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
 WiFiClientSecure client;
@@ -20,29 +20,28 @@ UniversalTelegramBot bot(BOT_TOKEN, client);
 
 // --- НАСТРОЙКИ ДАТЧИКА ВЛАЖНОСТИ ---
 const int soilMoisturePin = A0;
-// <-- ИЗМЕНЕНИЕ: Устанавливаем порог в сырых значениях ADC (0-1023).
-// Чем ВЫШЕ значение, тем СУШЕ почва.
-// Подберите это значение экспериментально, наблюдая за показаниями в Мониторе порта.
 const int SOIL_MOISTURE_THRESHOLD = 700; 
+
+// --- НАСТРОЙКИ ДЛЯ СВЕТА ---
+const int lightControlPin = D5; // Пин для управления светом (GPIO14)
+const float LIGHT_THRESHOLD = 30.0; // Порог освещённости в люксах
+bool lightOn = false; // Состояние света
 
 // Переменные для контроля времени
 unsigned long lastCheckTime = 0;
-const long checkInterval = 60000; // Интервал проверки датчиков (1 минута)
-bool notificationSent = false; // Флаг, чтобы не отправлять сообщения постоянно
+const long checkInterval = 60000; // Интервал проверки (1 минута)
+bool notificationSent = false; // Флаг, чтобы не спамить Telegram
 
-// Датчик освещенности TSL2561
+// Датчик освещенности
 Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
-// --- Функции для датчика освещенности, Wi-Fi и т.д. (без изменений) ---
-
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 void displaySensorDetails(void) {
   sensor_t sensor;
   tsl.getSensor(&sensor);
   Serial.println("------------------------------------");
-  Serial.print  ("Датчик:           "); Serial.println(sensor.name);
-  // ... (остальной код функции без изменений) ...
+  Serial.print("Датчик:           "); Serial.println(sensor.name);
   Serial.println("------------------------------------");
-  Serial.println("");
   delay(500);
 }
 
@@ -50,8 +49,8 @@ void configureSensor(void) {
   tsl.enableAutoRange(true);
   tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
   Serial.println("------------------------------------");
-  Serial.print  ("Усиление:         "); Serial.println("Auto");
-  Serial.print  ("Время интеграции: "); Serial.println("13 ms");
+  Serial.print("Усиление:         "); Serial.println("Auto");
+  Serial.print("Время интеграции: "); Serial.println("13 ms");
   Serial.println("------------------------------------");
 }
 
@@ -75,22 +74,24 @@ void ensureWiFiConnection() {
   }
 }
 
-// --- ФУНКЦИЯ SETUP ---
+// --- SETUP ---
 void setup(void) {
   Serial.begin(9600);
   Serial.println("\n\nЗапуск устройства...");
-  
+
   // Инициализация датчика освещенности
   if (!tsl.begin()) {
-    Serial.print("Датчик TSL2561 не найден!");
+    Serial.println("Датчик TSL2561 не найден!");
     while (1) { delay(1000); }
   }
   displaySensorDetails();
   configureSensor();
 
   pinMode(soilMoisturePin, INPUT);
+  pinMode(lightControlPin, OUTPUT);
+  digitalWrite(lightControlPin, LOW); // Выключаем свет на старте
 
-  // Подключаемся к Wi-Fi
+  // Подключение к Wi-Fi
   Serial.print("Подключение к Wi-Fi: ");
   Serial.println(ssid);
   WiFi.mode(WIFI_STA);
@@ -102,11 +103,10 @@ void setup(void) {
   Serial.println("\nWiFi подключен!");
   Serial.print("IP адрес: ");
   Serial.println(WiFi.localIP());
-  
+
   delay(1000);
   client.setInsecure();
 
-  // Проверка связи с ботом
   Serial.println("Попытка установить связь с Telegram ботом...");
   if (bot.getMe()) {
     Serial.println("Связь с ботом установлена: " + bot.botName);
@@ -115,56 +115,63 @@ void setup(void) {
   }
 
   Serial.println("\nУстройство готово к работе!");
-  Serial.println("Порог срабатывания по влажности (raw): " + String(SOIL_MOISTURE_THRESHOLD));
+  Serial.println("Порог влажности (raw): " + String(SOIL_MOISTURE_THRESHOLD));
   Serial.println("");
 }
 
-// --- ГЛАВНЫЙ ЦИКЛ LOOP ---
+// --- LOOP ---
 void loop(void) {
-  // Проверяем и восстанавливаем соединение с Wi-Fi
   ensureWiFiConnection();
 
   unsigned long currentMillis = millis();
-
-  // Проверяем датчики раз в `checkInterval`
   if (currentMillis - lastCheckTime >= checkInterval) {
     lastCheckTime = currentMillis;
 
-    // --- ЛОГИКА ДАТЧИКА ВЛАЖНОСТИ (ИЗМЕНЕНО) ---
+    // --- Чтение влажности ---
     int soilValue = analogRead(soilMoisturePin);
     Serial.print("Текущее значение влажности (raw): ");
     Serial.println(soilValue);
 
-    // Сравниваем сырое значение с порогом
     if (soilValue > SOIL_MOISTURE_THRESHOLD) {
-      // Если почва сухая и уведомление еще не было отправлено
       if (!notificationSent) {
-        String message = "Внимание! Почва слишком сухая. \nТекущее значение: " + String(soilValue) + "\nПорог: " + String(SOIL_MOISTURE_THRESHOLD);
+        String message = "Внимание! Почва слишком сухая.\nЗначение: " + String(soilValue) +
+                         "\nПорог: " + String(SOIL_MOISTURE_THRESHOLD);
         bot.sendMessage(CHAT_ID, message, "");
         Serial.println("ОТПРАВЛЕНО УВЕДОМЛЕНИЕ О СУХОЙ ПОЧВЕ");
-        notificationSent = true; // Устанавливаем флаг, чтобы не спамить
+        notificationSent = true;
       }
     } else {
-      // Если влажность в норме, сбрасываем флаг
       if (notificationSent) {
-         Serial.println("Влажность в норме, можно будет снова отправлять уведомление.");
-         notificationSent = false;
+        Serial.println("Влажность в норме, сброс флага уведомлений.");
+        notificationSent = false;
       }
     }
 
-    // --- ЛОГИКА ДАТЧИКА ОСВЕЩЕННОСТИ ---
+    // --- Чтение освещенности ---
     sensors_event_t event;
     tsl.getEvent(&event);
-
     if (event.light) {
-      Serial.print("Освещенность: "); 
+      Serial.print("Освещенность: ");
       Serial.print(event.light);
       Serial.println(" lux");
-      // Если хотите получать сообщения об освещенности, раскомментируйте строку ниже
-      // bot.sendMessage(CHAT_ID, "Текущая освещенность: " + String(event.light) + " lux", "");
+
+      // --- Управление светом ---
+      if (event.light < LIGHT_THRESHOLD && !lightOn) {
+        digitalWrite(lightControlPin, HIGH); // Включаем свет
+        lightOn = true;
+        Serial.println("Свет ВКЛЮЧЕН (низкая освещенность)");
+        bot.sendMessage(CHAT_ID, "Освещенность низкая (" + String(event.light) + " lux). Свет включён.", "");
+      } else if (event.light >= LIGHT_THRESHOLD && lightOn) {
+        digitalWrite(lightControlPin, LOW); // Выключаем свет
+        lightOn = false;
+        Serial.println("Свет ВЫКЛЮЧЕН (достаточная освещенность)");
+        bot.sendMessage(CHAT_ID, "Освещенность достаточная (" + String(event.light) + " lux). Свет выключен.", "");
+      }
+
     } else {
-      Serial.println("Ошибка чтения датчика освещенности");
+      Serial.println("Ошибка чтения освещённости");
     }
-     Serial.println("--- Конец проверки ---");
+
+    Serial.println("--- Конец проверки ---");
   }
 }
