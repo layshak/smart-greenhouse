@@ -23,15 +23,13 @@ const int soilMoisturePin = A0;
 const int SOIL_MOISTURE_THRESHOLD = 300;
 
 // --- НАСТРОЙКИ ДЛЯ СВЕТА ---
-// vvv ИСПРАВЛЕНИЕ 1: Заменяем D5 на номер GPIO vvv
 const int lightControlPin = 14; // Пин для управления светом (GPIO14)
-// ^^^ КОНЕЦ ИСПРАВЛЕНИЯ 1 ^^^
-const float LIGHT_THRESHOLD = 30.0; // Порог освещённости в люксах
+const float LIGHT_THRESHOLD = 100; // Порог освещённости в люксах
 bool lightOn = false; // Состояние света
 
 // Переменные для контроля времени
 unsigned long lastCheckTime = 0;
-const long checkInterval = 30000; // Интервал проверки (1 минута)
+const long checkInterval = 5000; // Интервал проверки 5 секунд
 bool notificationSent = false; // Флаг, чтобы не спамить Telegram
 
 // Датчик освещенности
@@ -110,18 +108,18 @@ void setup(void) {
   client.setInsecure();
 
   Serial.println("Попытка установить связь с Telegram ботом...");
-  // vvv ИСПРАВЛЕНИЕ 2: Упрощаем проверку связи с ботом vvv
   if (bot.getMe()) {
     Serial.println("Связь с ботом установлена успешно!");
   } else {
     Serial.println("Не удалось установить связь с ботом.");
   }
-  // ^^^ КОНЕЦ ИСПРАВЛЕНИЯ 2 ^^^
 
   Serial.println("\nУстройство готово к работе!");
   Serial.println("Порог влажности (raw): " + String(SOIL_MOISTURE_THRESHOLD));
-  Serial.println("");
+  Serial.println("Порог освещенности (lux): " + String(LIGHT_THRESHOLD));
+  Serial.println("---");
 }
+
 
 // --- LOOP ---
 void loop(void) {
@@ -131,51 +129,55 @@ void loop(void) {
   if (currentMillis - lastCheckTime >= checkInterval) {
     lastCheckTime = currentMillis;
 
-    // --- Чтение влажности ---
+    // --- Чтение датчиков ---
     int soilValue = analogRead(soilMoisturePin);
-    Serial.print("Текущее значение влажности (raw): ");
-    Serial.println(soilValue);
+    sensors_event_t event;
+    tsl.getEvent(&event);
 
+    // >>> НАЧАЛО ДОБАВЛЕННОГО КОДА <<<
+    // Вывод значений датчиков в одну строку в монитор порта
+    Serial.print("Влажность: ");
+    Serial.print(soilValue);
+    Serial.print(" | Освещенность: ");
+    if (event.light) {
+      Serial.print(event.light);
+      Serial.print(" lux");
+    } else {
+      Serial.print("ошибка чтения");
+    }
+    Serial.println(); // Переход на новую строку для следующего вывода
+    // >>> КОНЕЦ ДОБАВЛЕННОГО КОДА <<<
+
+    // --- Логика по влажности ---
     if (soilValue > SOIL_MOISTURE_THRESHOLD) {
       if (!notificationSent) {
         String message = "Внимание! Почва слишком сухая.\nЗначение: " + String(soilValue) +
                          "\nПорог: " + String(SOIL_MOISTURE_THRESHOLD);
         bot.sendMessage(CHAT_ID, message, "");
-        Serial.println("ОТПРАВЛЕНО УВЕДОМЛЕНИЕ О СУХОЙ ПОЧВЕ");
+        Serial.println(" -> ОТПРАВЛЕНО УВЕДОМЛЕНИЕ О СУХОЙ ПОЧВЕ");
         notificationSent = true;
       }
     } else {
       if (notificationSent) {
-        Serial.println("Влажность в норме, сброс флага уведомлений.");
+        Serial.println(" -> Влажность в норме, сброс флага уведомлений.");
         notificationSent = false;
       }
     }
 
-    // --- Чтение освещенности ---
-    sensors_event_t event;
-    tsl.getEvent(&event);
+    // --- Логика по освещенности ---
     if (event.light) {
-      Serial.print("Освещенность: ");
-      Serial.print(event.light);
-      Serial.println(" lux");
-
       // --- Управление светом ---
       if (event.light < LIGHT_THRESHOLD && !lightOn) {
         digitalWrite(lightControlPin, HIGH); // Включаем свет
         lightOn = true;
-        Serial.println("Свет ВКЛЮЧЕН (низкая освещенность)");
+        Serial.println(" -> Свет ВКЛЮЧЕН (низкая освещенность)");
         bot.sendMessage(CHAT_ID, "Освещенность низкая (" + String(event.light) + " lux). Свет включён.", "");
       } else if (event.light >= LIGHT_THRESHOLD && lightOn) {
         digitalWrite(lightControlPin, LOW); // Выключаем свет
         lightOn = false;
-        Serial.println("Свет ВЫКЛЮЧЕН (достаточная освещенность)");
+        Serial.println(" -> Свет ВЫКЛЮЧЕН (достаточная освещенность)");
         bot.sendMessage(CHAT_ID, "Освещенность достаточная (" + String(event.light) + " lux). Свет выключен.", "");
       }
-
-    } else {
-      Serial.println("Ошибка чтения освещённости");
     }
-
-    Serial.println("--- Конец проверки ---");
   }
 }
