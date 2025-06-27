@@ -7,12 +7,12 @@
 
 // --- НАСТРОЙКИ ---
 // Укажите данные вашей Wi-Fi сети
-const char* ssid = "";
-const char* password = "";
+const char* ssid = "Galaxy A25 5G 747A";
+const char* password = "12121212";
 
 // Укажите токен вашего бота и ваш Chat ID
-#define BOT_TOKEN ""
-#define CHAT_ID ""
+#define BOT_TOKEN "7931280012:AAF3nKFP2JMF0KkpswHimA-EZKh2HgffzUU"
+#define CHAT_ID "5291140379"
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
 WiFiClientSecure client;
@@ -20,16 +20,18 @@ UniversalTelegramBot bot(BOT_TOKEN, client);
 
 // --- НАСТРОЙКИ ДАТЧИКА ВЛАЖНОСТИ ---
 const int soilMoisturePin = A0;
-const int SOIL_MOISTURE_THRESHOLD = 700; 
+const int SOIL_MOISTURE_THRESHOLD = 300;
 
 // --- НАСТРОЙКИ ДЛЯ СВЕТА ---
-const int lightControlPin = D5; // Пин для управления светом (GPIO14)
+// vvv ИСПРАВЛЕНИЕ 1: Заменяем D5 на номер GPIO vvv
+const int lightControlPin = 14; // Пин для управления светом (GPIO14)
+// ^^^ КОНЕЦ ИСПРАВЛЕНИЯ 1 ^^^
 const float LIGHT_THRESHOLD = 30.0; // Порог освещённости в люксах
 bool lightOn = false; // Состояние света
 
 // Переменные для контроля времени
 unsigned long lastCheckTime = 0;
-const long checkInterval = 60000; // Интервал проверки (1 минута)
+const long checkInterval = 30000; // Интервал проверки (1 минута)
 bool notificationSent = false; // Флаг, чтобы не спамить Telegram
 
 // Датчик освещенности
@@ -108,11 +110,13 @@ void setup(void) {
   client.setInsecure();
 
   Serial.println("Попытка установить связь с Telegram ботом...");
+  // vvv ИСПРАВЛЕНИЕ 2: Упрощаем проверку связи с ботом vvv
   if (bot.getMe()) {
-    Serial.println("Связь с ботом установлена: " + bot.botName);
+    Serial.println("Связь с ботом установлена успешно!");
   } else {
     Serial.println("Не удалось установить связь с ботом.");
   }
+  // ^^^ КОНЕЦ ИСПРАВЛЕНИЯ 2 ^^^
 
   Serial.println("\nУстройство готово к работе!");
   Serial.println("Порог влажности (raw): " + String(SOIL_MOISTURE_THRESHOLD));
